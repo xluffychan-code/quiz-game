@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Genius Quiz</title>
+
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:Arial,Helvetica,sans-serif;
+  background:linear-gradient(135deg,#1e3c72,#2a5298);
+  color:#fff;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  min-height:100vh;
+}
+.game{
+  width:95%;
+  max-width:650px;
+  background:#111;
+  border-radius:16px;
+  padding:18px;
+  box-shadow:0 0 25px rgba(0,0,0,.6);
+}
+.hidden{display:none}
+button{
+  width:100%;
+  padding:14px;
+  margin:8px 0;
+  border:none;
+  border-radius:12px;
+  background:#2a9df4;
+  color:#fff;
+  font-size:16px;
+  cursor:pointer;
+}
+.option{background:#333}
+.top{display:flex;justify-content:space-between;font-size:14px}
+input{
+  width:100%;padding:12px;margin-bottom:12px;
+  border-radius:10px;border:none
+}
+.bar-wrap{
+  width:100%;height:8px;background:#333;
+  border-radius:6px;overflow:hidden;margin:6px 0
+}
+.bar{height:100%;width:100%;background:#2a9df4}
+
+/* BIGGER QUESTION FONT */
+#question{
+  font-size:1.45rem;
+  font-weight:600;
+  line-height:1.45;
+  margin:12px 0;
+}
+
+/* animations */
+.correct{background:#2ecc71!important;animation:pop .35s}
+.wrong{background:#e74c3c!important;animation:shake .4s}
+@keyframes pop{50%{transform:scale(1.1)}}
+@keyframes shake{
+  0%{transform:translateX(0)}
+  25%{transform:translateX(-5px)}
+  50%{transform:translateX(5px)}
+  75%{transform:translateX(-5px)}
+  100%{transform:translateX(0)}
+}
+.toggle{background:#444;font-size:14px}
+
+.leaderboard li{
+  background:#222;
+  margin:6px 0;
+  padding:6px;
+  border-radius:8px;
+  font-size:14px;
+}
+</style>
+</head>
+
+<body>
+<div class="game">
+
+<!-- START -->
+<div id="start">
+  <h2>🧠 GENIUS QUIZ</h2>
+  <input id="playerName" placeholder="Enter your name">
+
+  <h3>🌍 Global Top Players</h3>
+  <ol id="leaderboard" class="leaderboard"></ol>
+
+  <button id="startBtn">Start Game</button>
+</div>
+
+<!-- QUIZ -->
+<div id="quiz" class="hidden">
+  <div class="top">
+    <div id="playerLabel"></div>
+    <button id="soundToggle" class="toggle">🔊 Sound ON</button>
+  </div>
+
+  <div class="top">
+    <div>⏱️ <span id="roundTime">120</span>s</div>
+    <div>❌ <span id="wrong">0</span>/5</div>
+  </div>
+  <div class="bar-wrap"><div id="roundBar" class="bar"></div></div>
+
+  <div class="top">
+    <div>⏳ <span id="qTime">5</span>s</div>
+    <div>Score: <span id="score">0</span></div>
+  </div>
+  <div class="bar-wrap"><div id="qBar" class="bar"></div></div>
+
+  <h3 id="question"></h3>
+  <div id="options"></div>
+</div>
+
+<!-- END -->
+<div id="end" class="hidden">
+  <h2>Game Over</h2>
+  <p>Final Score: <span id="finalScore"></span></p>
+  <p>Your Rank: <strong id="rankBadge"></strong></p>
+  <button onclick="location.reload()">Play Again</button>
+</div>
+
+</div>
+
+<!-- AUDIO -->
+<audio id="bgMusic" loop>
+  <source src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_56d28b81d7.mp3">
+</audio>
+<audio id="correctSound">
+  <source src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_c3b5c03bfa.mp3">
+</audio>
+<audio id="wrongSound">
+  <source src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_95e0f999c7.mp3">
+</audio>
+
+<!-- FIREBASE -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyCwW0GJ-IkkQPTsfUXvHxY8A-nvO0-Pv7Q",
+  authDomain: "genius-quiz-game.firebaseapp.com",
+  databaseURL: "https://genius-quiz-game-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "genius-quiz-game",
+  storageBucket: "genius-quiz-game.firebasestorage.app",
+  messagingSenderId: "74564801594",
+  appId: "1:74564801594:web:28d16f53b691efe434d103"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+</script>
+
+<script>
+/* ---------- UTIL ---------- */
+const rand=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}};
+
+/* ---------- RANK ---------- */
+function getRank(score){
+  if(score>=400) return "🏆 Einstein";
+  if(score>=300) return "🥇 Genius";
+  if(score>=200) return "🥈 Brainiac";
+  if(score>=100) return "🥉 Smart";
+  return "🙂 Rookie";
+}
+
+/* ---------- QUESTIONS ---------- */
+const trivia=[
+ {q:"Capital of France?",o:["Rome","Paris","Berlin","Madrid"],a:1},
+ {q:"World War II ended in?",o:["1943","1944","1945","1946"],a:2},
+ {q:"Who painted the Mona Lisa?",o:["Michelangelo","Da Vinci","Raphael","Donatello"],a:1},
+ {q:"Largest planet?",o:["Earth","Mars","Jupiter","Venus"],a:2},
+{q:"Which particle mediates the strong nuclear force?",o:["Photon","Gluon","W Boson","Graviton"],a:1},
+{q:"What is the SI unit of electric flux?",o:["Weber","Tesla","Volt","Coulomb"],a:0},
+{q:"Who formulated the uncertainty principle?",o:["Einstein","Bohr","Heisenberg","Schrödinger"],a:2},
+{q:"Which logic gate outputs false only when all inputs are true?",o:["OR","NAND","NOR","AND"],a:1},
+{q:"What does Big-O notation describe?",o:["Memory size","Algorithm efficiency","CPU speed","Compilation time"],a:1},
+{q:"Which scientist proposed the heliocentric model?",o:["Ptolemy","Kepler","Copernicus","Galileo"],a:2},
+{q:"What is the speed of light in vacuum (approx)?",o:["3×10⁶ m/s","3×10⁷ m/s","3×10⁸ m/s","3×10⁹ m/s"],a:2},
+{q:"Which metal has the highest electrical conductivity?",o:["Gold","Copper","Silver","Aluminum"],a:2},
+{q:"Which law states entropy of an isolated system always increases?",o:["First Law","Second Law","Third Law","Zeroth Law"],a:1},
+{q:"What does RAM stand for?",o:["Read Access Memory","Random Allocation Memory","Random Access Memory","Rapid Access Module"],a:2},
+{q:"Which scientist developed general relativity?",o:["Newton","Einstein","Maxwell","Feynman"],a:1},
+{q:"What is the main component of the Sun?",o:["Oxygen","Helium","Hydrogen","Carbon"],a:2},
+{q:"Which programming language is closest to machine code?",o:["Python","Assembly","C++","Java"],a:1},
+{q:"What is the pH value of pure water at 25°C?",o:["5","6","7","8"],a:2},
+{q:"What type of wave is light?",o:["Mechanical","Longitudinal","Transverse","Sound"],a:2},
+{q:"Who invented the transistor?",o:["Edison","Tesla","Shockley","Bell"],a:2},
+{q:"Which planet has the strongest magnetic field?",o:["Earth","Jupiter","Saturn","Neptune"],a:1},
+{q:"What does HTTP stand for?",o:["HyperText Transfer Protocol","High Transfer Text Process","Hyperlink Transmission Program","Host Transfer Protocol"],a:0},
+{q:"Which element has atomic number 1?",o:["Helium","Hydrogen","Oxygen","Carbon"],a:1},
+{q:"What is Moore’s Law related to?",o:["Internet speed","Transistor density","Power consumption","Clock speed"],a:1},
+{q:"What is the time complexity of binary search?",o:["O(n)","O(log n)","O(n²)","O(1)"],a:1},
+{q:"Which subatomic particle has no electric charge?",o:["Proton","Electron","Neutron","Muon"],a:2},
+{q:"What does CPU stand for?",o:["Central Processing Unit","Computer Power Unit","Core Processing Utility","Central Program Unit"],a:0},
+{q:"Which gas is most abundant in Earth’s atmosphere?",o:["Oxygen","Carbon Dioxide","Nitrogen","Argon"],a:2},
+{q:"What is the name of the first artificial satellite?",o:["Voyager","Sputnik 1","Explorer 1","Apollo"],a:1},
+{q:"Which law relates voltage, current, and resistance?",o:["Faraday’s Law","Ohm’s Law","Kirchhoff’s Law","Ampere’s Law"],a:1},
+{q:"Which data structure uses FIFO?",o:["Stack","Tree","Queue","Heap"],a:2},
+{q:"What is the main semiconductor material in CPUs?",o:["Germanium","Gallium","Silicon","Carbon"],a:2},
+{q:"What does AI stand for?",o:["Automated Intelligence","Artificial Intelligence","Advanced Interface","Algorithmic Input"],a:1},
+{q:"Which wavelength has the highest energy?",o:["Radio","Infrared","Ultraviolet","Gamma"],a:3},
+{q:"Who is the father of modern computing?",o:["Alan Turing","Charles Babbage","John von Neumann","Ada Lovelace"],a:1},
+{q:"Which phenomenon explains GPS time correction?",o:["Quantum tunneling","General relativity","Doppler effect","Photoelectric effect"],a:1},
+{q:"What is the primary function of an operating system?",o:["Run hardware","Manage resources","Compile programs","Execute code"],a:1},
+{q:"What is the unit of capacitance?",o:["Henry","Farad","Ohm","Tesla"],a:1},
+{q:"Which algorithm is used for shortest path?",o:["DFS","BFS","Dijkstra","Prim"],a:2},
+{q:"What is the main cause of climate change?",o:["Solar flares","Volcanic activity","Greenhouse gases","Earth’s rotation"],a:2},
+{q:"Which particle is responsible for beta decay?",o:["Photon","Electron","Neutrino","Positron"],a:1},
+{q:"What does VPN stand for?",o:["Virtual Private Network","Verified Public Network","Variable Protocol Node","Virtual Processing Network"],a:0},
+{q:"What type of energy does a moving object have?",o:["Potential","Thermal","Chemical","Kinetic"],a:3},
+{q:"Which treaty formally recognized the sovereignty of the Swiss Confederation in 1648?",o:["Utrecht","Westphalia","Vienna","Augsburg"],a:1},
+{q:"What is the name of the Byzantine law code compiled under Emperor Justinian I?",o:["Twelve Tables","Corpus Juris Civilis","Lex Salica","Magna Carta"],a:1},
+{q:"Which physicist first proposed quantization of energy?",o:["Einstein","Planck","Bohr","Heisenberg"],a:1},
+{q:"The Battle of Talas (751) halted expansion of which Chinese dynasty?",o:["Han","Song","Tang","Yuan"],a:2},
+{q:"Which algorithm has an average time complexity of O(n log n) and is comparison-based?",o:["Bubble Sort","Quick Sort","Linear Search","Radix Sort"],a:1},
+{q:"Who was the last Western Roman Emperor?",o:["Nero","Romulus","Romulus Augustulus","Odoacer"],a:2},
+{q:"What fundamental force is described by quantum chromodynamics?",o:["Electromagnetic","Weak","Strong","Gravitational"],a:2},
+{q:"Which ancient civilization first developed positional number systems?",o:["Roman","Greek","Babylonian","Egyptian"],a:2},
+{q:"What phenomenon causes atomic clocks on GPS satellites to drift?",o:["Quantum tunneling","Time dilation","Redshift","Photoelectric effect"],a:1},
+{q:"Which empire institutionalized the Janissary corps?",o:["Byzantine","Ottoman","Persian","Mughal"],a:1},
+{q:"Which programming paradigm emphasizes immutability and pure functions?",o:["Procedural","Object-Oriented","Functional","Imperative"],a:2},
+{q:"Who authored the Arthashastra, an ancient treatise on statecraft?",o:["Ashoka","Chanakya","Kalidasa","Panini"],a:1},
+{q:"Which particle is exchanged during beta-minus decay?",o:["Proton","Neutron","Electron","Neutrino"],a:2},
+{q:"The Peace of Augsburg (1555) introduced which principle?",o:["Divine Right","Cuius regio, eius religio","Balance of Power","Popular Sovereignty"],a:1},
+{q:"Which data structure guarantees amortized O(1) insertion at the end?",o:["Array","Linked List","Stack","Dynamic Array"],a:3},
+{q:"What civilization constructed Angkor Wat?",o:["Thai","Khmer","Burmese","Vietnamese"],a:1},
+{q:"Which equation unifies electricity and magnetism?",o:["Ohm’s Law","Maxwell’s Equations","Gauss’s Law","Faraday’s Law"],a:1},
+{q:"Who was the founder of the Achaemenid Persian Empire?",o:["Darius I","Xerxes","Cyrus the Great","Cambyses"],a:2},
+{q:"Which cryptographic concept ensures data has not been altered?",o:["Encryption","Authentication","Integrity","Confidentiality"],a:2},
+{q:"What is the entropy change of a perfectly reversible process?",o:["Positive","Negative","Infinite","Zero"],a:3},
+{q:"Which medieval institution preserved and copied classical manuscripts?",o:["Feudal courts","Monasteries","Guilds","Universities"],a:1},
+{q:"Which computational problem is known as NP-complete?",o:["Binary Search","Sorting","Traveling Salesman","Matrix Multiplication"],a:2},
+{q:"Who formulated the heliocentric model before Galileo?",o:["Aristotle","Ptolemy","Copernicus","Kepler"],a:2},
+{q:"What is the SI unit of magnetic flux?",o:["Tesla","Weber","Henry","Farad"],a:1},
+{q:"Which civilization developed the Long Count calendar?",o:["Aztec","Inca","Maya","Olmec"],a:2},
+{q:"Which concept explains why light can eject electrons from metals?",o:["Compton Effect","Photoelectric Effect","Wave Interference","Diffraction"],a:1},
+{q:"Who was the last emperor of China?",o:["Sun Yat-sen","Yuan Shikai","Puyi","Guangxu"],a:2},
+{q:"Which OS scheduling algorithm minimizes average waiting time?",o:["FCFS","Round Robin","Shortest Job First","Priority"],a:2},
+{q:"Which battle permanently ended Napoleon’s rule?",o:["Austerlitz","Leipzig","Waterloo","Trafalgar"],a:2},
+{q:"What does Gödel’s Incompleteness Theorem imply?",o:["All math is provable","Logic is flawed","Some truths are unprovable","Math is subjective"],a:2},
+];
+
+function genMath(l){
+ let a,b,ans,op;
+ if(l<5){a=rand(1,10);b=rand(1,10);ans=a+b;op="+";}
+ else if(l<10){a=rand(5,20);b=rand(1,10);ans=a-b;op="−";}
+ else{a=rand(2,12);b=rand(2,12);ans=a*b;op="×";}
+ let o=[ans,ans+1,ans-1,ans+rand(2,5)];
+ shuffle(o);
+ return{q:`${a} ${op} ${b} = ?`,o:o.map(String),a:o.indexOf(ans)};
+}
+
+/* ---------- STATE ---------- */
+let questions=[],index=0,score=0,wrong=0;
+let roundTime=120,qTime=5,rt,qt;
+let soundOn=true;
+
+/* ---------- ELEMENTS ---------- */
+const scoreEl=document.getElementById("score");
+const wrongEl=document.getElementById("wrong");
+const roundTimeEl=document.getElementById("roundTime");
+const qTimeEl=document.getElementById("qTime");
+const bgMusic=document.getElementById("bgMusic");
+const correctSound=document.getElementById("correctSound");
+const wrongSound=document.getElementById("wrongSound");
+
+bgMusic.volume=0.25;
+correctSound.volume=0.7;
+wrongSound.volume=0.7;
+
+/* ---------- LEADERBOARD ---------- */
+function loadLeaderboard(){
+  const list=document.getElementById("leaderboard");
+  db.ref("leaderboard")
+    .orderByChild("score")
+    .limitToLast(5)
+    .on("value",snap=>{
+      list.innerHTML="";
+      const data=[];
+      snap.forEach(s=>data.push(s.val()));
+      data.reverse().forEach(p=>{
+        const li=document.createElement("li");
+        li.textContent=`${p.rank||"🙂"} ${p.name} - ${p.score}`;
+        list.appendChild(li);
+      });
+    });
+}
+loadLeaderboard();
+
+/* ---------- START ---------- */
+startBtn.onclick=()=>{
+  playerLabel.textContent="👤 "+(playerName.value||"Player");
+
+  questions=[...trivia];
+  for(let i=0;i<20;i++) questions.push(genMath(i));
+  shuffle(questions);
+
+  start.classList.add("hidden");
+  quiz.classList.remove("hidden");
+
+  if(soundOn) bgMusic.play().catch(()=>{});
+
+  startRound();
+  loadQuestion();
+};
+
+/* ---------- SOUND TOGGLE ---------- */
+soundToggle.onclick=()=>{
+  soundOn=!soundOn;
+  soundToggle.textContent=soundOn?"🔊 Sound ON":"🔇 Sound OFF";
+  if(soundOn) bgMusic.play().catch(()=>{});
+  else bgMusic.pause();
+};
+
+/* ---------- ROUND TIMER ---------- */
+function startRound(){
+  rt=setInterval(()=>{
+    roundTime--;
+    roundTimeEl.textContent=roundTime;
+    roundBar.style.width=(roundTime/120*100)+"%";
+    if(roundTime<=0) endGame();
+  },1000);
+}
+
+/* ---------- QUESTION ---------- */
+function loadQuestion(){
+  clearInterval(qt);
+  if(index>=questions.length||wrong>=5) return endGame();
+
+  const q=questions[index++];
+  question.textContent=q.q;
+  options.innerHTML="";
+
+  q.o.forEach((op,i)=>{
+    const b=document.createElement("button");
+    b.className="option";
+    b.textContent=op;
+    b.onclick=()=>answer(i,q);
+    options.appendChild(b);
+  });
+
+  qTime=5;
+  qTimeEl.textContent=qTime;
+  qBar.style.width="100%";
+
+  qt=setInterval(()=>{
+    qTime--;
+    qTimeEl.textContent=qTime;
+    qBar.style.width=(qTime/5*100)+"%";
+    if(qTime<=0){
+      wrong++;
+      wrongEl.textContent=wrong;
+      clearInterval(qt);
+      loadQuestion();
+    }
+  },1000);
+}
+
+/* ---------- ANSWER ---------- */
+function answer(i,q){
+  clearInterval(qt);
+  const btns=document.querySelectorAll(".option");
+  btns.forEach(b=>b.disabled=true);
+
+  if(i===q.a){
+    btns[i].classList.add("correct");
+    score+=10;
+    if(soundOn){correctSound.currentTime=0;correctSound.play().catch(()=>{});}
+  }else{
+    btns[i].classList.add("wrong");
+    btns[q.a].classList.add("correct");
+    wrong++;
+    if(soundOn){wrongSound.currentTime=0;wrongSound.play().catch(()=>{});}
+  }
+
+  scoreEl.textContent=score;
+  wrongEl.textContent=wrong;
+
+  if(wrong>=5){
+    setTimeout(endGame,600);
+    return;
+  }
+  setTimeout(loadQuestion,600);
+}
+
+/* ---------- END ---------- */
+function endGame(){
+  clearInterval(rt);clearInterval(qt);
+  bgMusic.pause();
+
+  const name=playerLabel.textContent.replace("👤 ","");
+  const rank=getRank(score);
+
+  rankBadge.textContent=rank;
+  finalScore.textContent=score;
+
+  db.ref("leaderboard").push({
+    name:name,
+    score:score,
+    rank:rank,
+    time:Date.now()
+  });
+
+  quiz.classList.add("hidden");
+  end.classList.remove("hidden");
+}
+</script>
+</body>
+</html>
