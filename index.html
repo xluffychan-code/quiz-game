@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Genius Quiz</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2a5298">
 
 <style>
 *{box-sizing:border-box}
@@ -258,7 +260,7 @@ function genMath(l){
 
 /* ---------- STATE ---------- */
 let questions=[],index=0,score=0,wrong=0;
-let roundTime=120,qTime=5,rt,qt;
+let roundTime=120,qTime=10,rt,qt;
 let soundOn=true;
 
 /* ---------- ELEMENTS ---------- */
@@ -345,14 +347,14 @@ function loadQuestion(){
     options.appendChild(b);
   });
 
-  qTime=5;
+  qTime=10;
   qTimeEl.textContent=qTime;
   qBar.style.width="100%";
 
   qt=setInterval(()=>{
     qTime--;
     qTimeEl.textContent=qTime;
-    qBar.style.width=(qTime/5*100)+"%";
+    qBar.style.width=(qTime/10*100)+"%";
     if(qTime<=0){
       wrong++;
       wrongEl.textContent=wrong;
@@ -409,6 +411,9 @@ function endGame(){
 
   quiz.classList.add("hidden");
   end.classList.remove("hidden");
+}
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("service-worker.js");
 }
 </script>
 </body>
