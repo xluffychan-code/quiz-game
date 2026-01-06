@@ -281,17 +281,28 @@ wrongSound.volume=0.7;
 
 /* ---------- LEADERBOARD ---------- */
 function loadLeaderboard(){
-  const list=document.getElementById("leaderboard");
+  const list = document.getElementById("leaderboard");
+
   db.ref("leaderboard")
     .orderByChild("score")
-    .limitToLast(5)
-    .on("value",snap=>{
-      list.innerHTML="";
-      const data=[];
-      snap.forEach(s=>data.push(s.val()));
-      data.reverse().forEach(p=>{
-        const li=document.createElement("li");
-        li.textContent=`${p.rank||"🙂"} ${p.name} - ${p.score}`;
+    .limitToLast(10)   // 👈 TOP 10
+    .on("value", snap => {
+
+      list.innerHTML = "";
+
+      const data = [];
+      snap.forEach(s => data.push(s.val()));
+
+      // Firebase returns ascending, so reverse
+      data.reverse().forEach((p, i) => {
+        const li = document.createElement("li");
+
+        // fallback safety
+        const rank = p.rank || "🙂 Rookie";
+        const name = p.name || "Anonymous";
+        const score = p.score || 0;
+
+        li.textContent = `${i+1}. ${rank} ${name} - ${score}`;
         list.appendChild(li);
       });
     });
@@ -421,4 +432,5 @@ if ("serviceWorker" in navigator) {
 </script>
 </body>
 </html>
+
 
